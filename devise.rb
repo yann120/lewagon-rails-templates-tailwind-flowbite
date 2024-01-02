@@ -4,11 +4,11 @@ run "if uname | grep -q 'Darwin'; then pgrep spring | xargs kill -9; fi"
 ########################################
 inject_into_file "Gemfile", before: "group :development, :test do" do
   <<~RUBY
-    gem "bootstrap", "~> 5.2"
+    gem "tailwindcss-rails"
     gem "devise"
     gem "autoprefixer-rails"
-    gem "font-awesome-sass", "~> 6.1"
     gem "simple_form", github: "heartcombo/simple_form"
+    gem "simple_form-tailwind"
     gem "sassc-rails"
 
   RUBY
@@ -17,14 +17,6 @@ end
 inject_into_file "Gemfile", after: "group :development, :test do" do
   "\n  gem \"dotenv-rails\""
 end
-
-# Assets
-########################################
-run "rm -rf app/assets/stylesheets"
-run "rm -rf vendor"
-run "curl -L https://github.com/lewagon/rails-stylesheets/archive/master.zip > stylesheets.zip"
-run "unzip stylesheets.zip -d app/assets && rm -f stylesheets.zip && rm -f app/assets/rails-stylesheets-master/README.md"
-run "mv app/assets/rails-stylesheets-master app/assets/stylesheets"
 
 # Layout
 ########################################
@@ -39,22 +31,23 @@ gsub_file(
 ########################################
 file "app/views/shared/_flashes.html.erb", <<~HTML
   <% if notice %>
-    <div class="alert alert-info alert-dismissible fade show m-1" role="alert">
+    <div class="bg-blue-100 border border-blue-500 text-blue-700 px-4 py-3 rounded relative m-1" role="alert">
       <%= notice %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close">
+      <button type="button" class="absolute top-0 bottom-0 right-0 px-4 py-3" data-bs-dismiss="alert" aria-label="Close">
       </button>
     </div>
   <% end %>
   <% if alert %>
-    <div class="alert alert-warning alert-dismissible fade show m-1" role="alert">
+    <div class="bg-yellow-100 border border-yellow-500 text-yellow-700 px-4 py-3 rounded relative m-1" role="alert">
       <%= alert %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close">
+      <button type="button" class="absolute top-0 bottom-0 right-0 px-4 py-3" data-bs-dismiss="alert" aria-label="Close">
       </button>
     </div>
   <% end %>
 HTML
 
-run "curl -L https://raw.githubusercontent.com/lewagon/awesome-navbars/master/templates/_navbar_wagon.html.erb > app/views/shared/_navbar.html.erb"
+# TODO: Add a tailwind version of the navbar
+run "echo '<div>navbar</div>' > app/views/shared/_navbar.html.erb"
 
 inject_into_file "app/views/layouts/application.html.erb", after: "<body>" do
   <<~HTML
@@ -82,14 +75,31 @@ RUBY
 
 environment generators
 
+tailwind_config = <<-TAILWIND_CONFIG
+module.exports = {
+  content: [
+    './app/helpers/**/*.rb',
+    './app/javascript/**/*.js',
+    './app/views/**/*',
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+TAILWIND_CONFIG
+
 ########################################
 # After bundle
 ########################################
 after_bundle do
-  # Generators: db + simple form + pages controller
+  # Generators: db + tailwind +  simple form + pages controller
   ########################################
   rails_command "db:drop db:create db:migrate"
-  generate("simple_form:install", "--bootstrap")
+  generate("tailwindcss:install")
+  File.write("config/tailwind.config.js", tailwind_config)
+  generate("simple_form:install")
+  generate("simple_form:tailwind:install")
   generate(:controller, "pages", "home", "--skip-routes", "--no-test-framework")
 
   # Routes
@@ -130,9 +140,9 @@ after_bundle do
     <p>Unhappy? <%= link_to "Cancel my account", registration_path(resource_name), data: { confirm: "Are you sure?" }, method: :delete %></p>
   HTML
   button_to = <<~HTML
-    <div class="d-flex align-items-center">
+    <div class="flex items-center">
       <div>Unhappy?</div>
-      <%= button_to "Cancel my account", registration_path(resource_name), data: { confirm: "Are you sure?" }, method: :delete, class: "btn btn-link" %>
+      <%= button_to "Cancel my account", registration_path(resource_name), data: { confirm: "Are you sure?" }, method: :delete, class: "text-blue-600 underline" %>
     </div>
   HTML
   gsub_file("app/views/devise/registrations/edit.html.erb", link_to, button_to)
@@ -154,25 +164,14 @@ after_bundle do
   environment 'config.action_mailer.default_url_options = { host: "http://localhost:3000" }', env: "development"
   environment 'config.action_mailer.default_url_options = { host: "http://TODO_PUT_YOUR_DOMAIN_HERE" }', env: "production"
 
-  # Bootstrap & Popper
+  # Tailwind
   ########################################
   append_file "config/importmap.rb", <<~RUBY
-    pin "bootstrap", to: "bootstrap.min.js", preload: true
-    pin "@popperjs/core", to: "popper.js", preload: true
-  RUBY
-
-  append_file "config/initializers/assets.rb", <<~RUBY
-    Rails.application.config.assets.precompile += %w(bootstrap.min.js popper.js)
+    pin "flowbite", to: "https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.1/flowbite.turbo.min.js", preload: true
   RUBY
 
   append_file "app/javascript/application.js", <<~JS
-    import "@popperjs/core"
-    import "bootstrap"
-  JS
-
-  append_file "app/assets/config/manifest.js", <<~JS
-    //= link popper.js
-    //= link bootstrap.min.js
+    import 'flowbite';
   JS
 
   # Heroku
@@ -191,5 +190,5 @@ after_bundle do
   ########################################
   git :init
   git add: "."
-  git commit: "-m 'Initial commit with devise template from https://github.com/lewagon/rails-templates'"
+  git commit: "-m 'Initial commit with devise tailwind template from https://github.com/yann120/lewagon-rails-templates-tailwind-flowbite'"
 end
